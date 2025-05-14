@@ -1,56 +1,86 @@
-const Product = require("./Product");
+const { getDatabase } = require('../database');
+const Product = require("./Product"); 
+const mongodb = require('mongodb');
+
+const COLLECTION_NAME = "carts"; 
+
+
 
 class Cart {
-  constructor() {}
+ 
+  static async add(productName) {
+    const db = getDatabase();
+    const product = await Product.findByName(productName);
 
-  static #items = [];
-
-  static add(productName) {
-    const product = Product.findByName(productName);
-
-    if (!product) {
-      throw new error(`Product '${productName}' not found.`);
+    if (!product || !product._id) {
+      console.error(`Product '${productName}' not found or has no ID.`);
+      throw new Error(`Product '${productName}' not found or has no ID.`);
     }
 
-    if (!this.#items.length) {
-      this.#items.push({ product, quantity: 1 });
+    const existingCartItem = await db.collection(COLLECTION_NAME).findOne({ productId: product._id });
 
-      return;
-    }
-
-    const existingProduct = this.#items.find(
-      (item) => item.product.name === productName
-    );
-
-    if (existingProduct) {
-      existingProduct.quantity += 1;
+    if (existingCartItem) {
+      return db.collection(COLLECTION_NAME).updateOne(
+        { productId: product._id },
+        { $inc: { quantity: 1 } }
+      );
     } else {
-      this.#items.push({ product, quantity: 1 });
+      return db.collection(COLLECTION_NAME).insertOne({
+        productId: product._id,
+        productName: product.name, 
+        price: product.price,      
+        quantity: 1
+      });
     }
   }
 
-  static getItems() {
-    return this.#items;
+  static async getItems() {
+    const db = getDatabase();
+    const cartItems = await db.collection(COLLECTION_NAME).find().toArray();
+
+    const populatedItems = await Promise.all(cartItems.map(async item => {
+        const productDetails = await Product.findById(item.productId);
+        if (productDetails) {
+            return {
+                product: productDetails, 
+                quantity: item.quantity
+            };
+        }
+        return null; 
+    }));
+
+    return populatedItems.filter(item => item !== null);
   }
 
-  static getProductsQuantity() {
-    if (!this.#items?.length) {
+
+  static async getProductsQuantity() {
+    const db = getDatabase();
+    const cartItems = await db.collection(COLLECTION_NAME).find().toArray();
+    if (!cartItems || cartItems.length === 0) {
       return 0;
     }
-
-    return this.#items.reduce((total, item) => {
-      return total + item.quantity;
-    }, 0);
+    return cartItems.reduce((total, item) => total + item.quantity, 0);
   }
 
-  static getTotalPrice() {
-    return this.#items.reduce((total, item) => {
-      return total + item.product.price * item.quantity;
-    }, 0);
+  static async getTotalPrice() {
+    const db = getDatabase();
+    const cartItems = await db.collection(COLLECTION_NAME).find().toArray();
+    if (!cartItems || cartItems.length === 0) {
+        return 0;
+    }
+
+    
+    let totalPrice = 0;
+    for (const item of cartItems) {
+       
+        totalPrice += item.price * item.quantity;
+    }
+    return totalPrice;
   }
 
-  static clearCart() {
-    this.#items = [];
+  static async clearCart() {
+    const db = getDatabase();
+    return db.collection(COLLECTION_NAME).deleteMany({});
   }
 }
 

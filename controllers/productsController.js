@@ -1,26 +1,24 @@
 const Product = require("../models/Product");
-
 const { MENU_LINKS } = require("../constants/navigation");
 const { STATUS_CODE } = require("../constants/statusCode");
-
 const cartController = require("./cartController");
 
-exports.getProductsView = (request, response) => {
-  const cartCount = cartController.getProductsCount();
-  const products = Product.getAll();
+exports.getProductsView = async (request, response) => {
+  const cartCount = await cartController.getProductsCount();
+  const products = await Product.getAll();
 
   response.render("products.ejs", {
     headTitle: "Shop - Products",
     path: "/",
     menuLinks: MENU_LINKS,
     activeLinkPath: "/products",
-    products,
+    products: products || [], 
     cartCount,
   });
 };
 
-exports.getAddProductView = (request, response) => {
-  const cartCount = cartController.getProductsCount();
+exports.getAddProductView = async (request, response) => {
+  const cartCount = await cartController.getProductsCount();
 
   response.render("add-product.ejs", {
     headTitle: "Shop - Add product",
@@ -31,9 +29,9 @@ exports.getAddProductView = (request, response) => {
   });
 };
 
-exports.getNewProductView = (request, response) => {
-  const cartCount = cartController.getProductsCount();
-  const newestProduct = Product.getLast();
+exports.getNewProductView = async (request, response) => {
+  const cartCount = await cartController.getProductsCount();
+  const newestProduct = await Product.getLast();
 
   response.render("new-product.ejs", {
     headTitle: "Shop - New product",
@@ -45,14 +43,14 @@ exports.getNewProductView = (request, response) => {
   });
 };
 
-exports.getProductView = (request, response) => {
-  const cartCount = cartController.getProductsCount();
+exports.getProductView = async (request, response) => {
+  const cartCount = await cartController.getProductsCount();
   const name = request.params.name;
 
-  const product = Product.findByName(name);
+  const product = await Product.findByName(name);
 
   response.render("product.ejs", {
-    headTitle: "Shop - Product",
+    headTitle: `Shop - ${product ? product.name : 'Product'}`,
     path: `/products/${name}`,
     activeLinkPath: `/products/${name}`,
     menuLinks: MENU_LINKS,
@@ -61,9 +59,13 @@ exports.getProductView = (request, response) => {
   });
 };
 
-exports.deleteProduct = (request, response) => {
+exports.deleteProduct = async (request, response) => {
   const name = request.params.name;
-  Product.deleteByName(name);
-
-  response.status(STATUS_CODE.OK).json({ success: true });
+  try {
+    await Product.deleteByName(name);
+    response.status(STATUS_CODE.OK).json({ success: true });
+  } catch (error) {
+    console.error("Error deleting product:", error);
+    response.status(500).json({ success: false, message: "Error deleting product" });
+  }
 };
